@@ -1,5 +1,3 @@
-#include <ezButton.h>
-
 #include "ButtonControl.h"
 #include "Led.h"
 #include "Ldr.h"

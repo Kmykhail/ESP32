@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ezButton.h>
+
 template <uint8_t Pin>
 class ButtonControl {
 private:
