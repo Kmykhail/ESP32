@@ -40,23 +40,30 @@ class Ldr {
 private:
   static constexpr uint32_t _sampleIntervalMs{10};
   Filter _filter;
+    uint16_t _rawValue{0};
   uint32_t _lastSampleMs{0};
 
 public:
   void update() {
     uint32_t now = millis();
     if (now - _lastSampleMs >= _sampleIntervalMs) {
-      _filter.update(analogRead(Pin));
+      _rawValue = analogRead(Pin);
+      _filter.update(_rawValue);
       _lastSampleMs = now;
     }
   }
 
-  [[nodiscard]] uint16_t getValue() const {
+  [[nodiscard]] uint16_t getFiltered() const {
     return _filter.getValue();
+  }
+
+  [[nodiscard]] uint16_t getRaw() const {
+    return _rawValue;
   }
 
   void reset() {
     _filter.reset();
+    _rawValue = 0;
     _lastSampleMs = 0;
   }
 };
