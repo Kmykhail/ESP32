@@ -18,16 +18,25 @@ enum class ButtonEvent {
 
 void buttonTask(void*)
 {
-    const auto event {ButtonEvent::Click};
-    auto previous {true};
+    auto lastState = static_cast<bool>(digitalRead(BTN_PIN));
+    auto stableState = lastState;
+    uint32_t lastDebounceTime = millis();
+
     for (;;) {
-        const auto current = static_cast<bool>(digitalRead(BTN_PIN));
-        if (previous && !current) {
-            xQueueSend(eventQueue, &event, 0);
-            vTaskDelay(pdMS_TO_TICKS(30));
+        const bool currentState = static_cast<bool>(digitalRead(BTN_PIN));
+
+        if (currentState != lastState) {
+            lastDebounceTime = millis();
+            lastState = currentState;
         }
 
-        previous = current;
+        if (millis() - lastDebounceTime >= DEBOUNCE_MS && currentState != stableState) {
+            stableState = currentState;
+            if (stableState) {
+                const auto event{ButtonEvent::Click};
+                xQueueSend(eventQueue, &event, 0);
+            }
+        }
 
         vTaskDelay(pdMS_TO_TICKS(10));
     }
