@@ -2,7 +2,11 @@
 #include <Adafruit_ST7735.h>
 #include <Adafruit_GFX.h>
 #include <SPI.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/queue.h>
 #include <cstdint>
+
 #include "bme280.h"
 
 #define TFT_CS        6
@@ -28,9 +32,7 @@ namespace {
 
 Adafruit_ST7735 tft(TFT_CS, TFT_DC, TFT_RES);
 BmeTemperature bmeTemp;
-
-uint32_t lastTimeUpdata {0};
-
+static QueueHandle_t queue{nullptr};
 
 void setupDisplay()
 {
@@ -44,39 +46,61 @@ void setupDisplay()
   tft.cp437(true);
 }
 
-void drawTemperature(float temperature)
+void drawTemperature(void *)
 {
-  tft.fillRect(
-    TEXT_X, TEXT_Y,
-    TEXT_WIDTH, TEXT_HEIGHT,
-    Display_Color_Blue
-  );
+  auto temperature{0.0f};
 
-  tft.setCursor(TEXT_X, TEXT_Y);
-  tft.print("Temperature: ");
-  tft.print(temperature, 2);
-  tft.write(0xF8);
-  tft.print("C");
+  for (;;) {
+    if (xQueueReceive(queue, &temperature, portMAX_DELAY) == pdPASS) {
+      tft.fillRect(
+        TEXT_X, TEXT_Y,
+        TEXT_WIDTH, TEXT_HEIGHT,
+        Display_Color_Blue
+      );
+    
+      tft.setCursor(TEXT_X, TEXT_Y);
+      tft.print("Temperature: ");
+      tft.print(temperature, 2);
+      tft.write(0xF8);
+      tft.print("C");
+    }
+  }
+}
+
+void temperatureReader(void *)
+{
+  auto temperature{0.0f};
+  for (;;) {
+      bmeTemp.loop();
+
+      temperature = bmeTemp.getTemperaturetFloat();
+
+      xQueueOverwrite(queue, &temperature);
+
+      vTaskDelay(pdMS_TO_TICKS(UPDATE_INTERVAL_MS));
+  }
 }
 
 void setup() {
   Serial.begin(115200);
   
-  setupDisplay();
-
-  tft.cp437(true);
   if (!bmeTemp.setup()) {
     while(1) {
       delay(1000);
     }
   }
+
+  setupDisplay();
+  queue = xQueueCreate(1, sizeof(float));
+  if (!queue) {
+    Serial.println("Failed to create queue");
+    exit(-1);
+  }
+
+  xTaskCreate(temperatureReader, "temperatureReader", 4096, nullptr, 1, nullptr);
+  xTaskCreate(drawTemperature, "drawTemperature", 4096, nullptr, 1, nullptr);
+
 }
 
 void loop() {
-  const auto time = millis();
-  if (time - lastTimeUpdata >= UPDATE_INTERVAL_MS) {
-    lastTimeUpdata = time;
-    bmeTemp.loop();
-    drawTemperature(bmeTemp.getTemperaturetFloat());
-  }
 }
